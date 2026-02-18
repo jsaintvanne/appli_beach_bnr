@@ -217,6 +217,13 @@ def get_calendar_options():
         "locale": "fr",
         "firstDay": 1,  # Commence le lundi (0=dimanche, 1=lundi)
         "displayEventEnd": True,  # Afficher l'heure de fin des événements
+        "eventTimeFormat": {  # Format court pour les heures (sans minutes si :00)
+            "hour": "numeric",
+            "minute": "2-digit",
+            "meridiem": False,
+            "omitZeroMinute": True
+        },
+        "eventDisplay": "block",  # Affichage en bloc pour éviter les débordements
         "editable": False,
         "selectable": True,
         "height": "auto",
