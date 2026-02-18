@@ -1,10 +1,335 @@
 import streamlit as st
 import pandas as pd
+import json
+import os
+from datetime import datetime, timedelta
 
-st.title("🏐 Planning des Entraînements")
+st.title("🏐 Planning des Entraînements et Tournois")
+
+# Chemin des fichiers
+ENTRAINEMENTS_FILE = "data/entrainements.csv"
+TOURNOIS_FILE = "data/tournois.csv"
+RESPONSABLES_FILE = "data/responsables.json"
+
+def load_responsables():
+    """Charge les responsables depuis le fichier JSON"""
+    if os.path.exists(RESPONSABLES_FILE):
+        try:
+            with open(RESPONSABLES_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except:
+            return {}
+    return {}
+
+def save_responsables(responsables):
+    """Sauvegarde les responsables dans le fichier JSON"""
+    os.makedirs("data", exist_ok=True)
+    with open(RESPONSABLES_FILE, "w", encoding="utf-8") as f:
+        json.dump(responsables, f, ensure_ascii=False, indent=2)
+
+def appliquer_entrainement_annee(jour_semaine, heure_debut, heure_fin, coach, terrain1, terrain2):
+    """Applique un entraînement récurrent sur toute l'année"""
+    responsables = load_responsables()
+    
+    # Mapping des jours en français vers les indices (0=lundi, 6=dimanche)
+    jours_mapping = {
+        "lundi": 0, "mardi": 1, "mercredi": 2, "jeudi": 3,
+        "vendredi": 4, "samedi": 5, "dimanche": 6
+    }
+    
+    jour_idx = jours_mapping.get(jour_semaine.lower())
+    if jour_idx is None:
+        return False
+    
+    # Calculer les créneaux horaires concernés (commence à 8h)
+    heure_debut_int = int(heure_debut.split(":")[0])
+    heure_fin_int = int(heure_fin.split(":")[0])
+    creneaux = list(range(heure_debut_int - 8, heure_fin_int - 8))
+    
+    # Parcourir toute l'année 2026
+    start_date = datetime(2026, 1, 1)
+    end_date = datetime(2026, 12, 31)
+    current_date = start_date
+    
+    count = 0
+    while current_date <= end_date:
+        # Vérifier si c'est le bon jour de la semaine
+        if current_date.weekday() == jour_idx:
+            year = current_date.year
+            month = current_date.month
+            day = current_date.day
+            
+            # Bloquer les créneaux avec le coach
+            for creneau in creneaux:
+                if terrain1:
+                    key = f"{year}-{month}-{day}-{creneau}-terrain1"
+                    responsables[key] = coach
+                if terrain2:
+                    key = f"{year}-{month}-{day}-{creneau}-terrain2"
+                    responsables[key] = coach
+            
+            count += 1
+        
+        current_date += timedelta(days=1)
+    
+    save_responsables(responsables)
+    return count
+
+def bloquer_tournoi(date, heure_debut, heure_fin, niveau, genre, terrain1, terrain2):
+    """Bloque les créneaux pour un tournoi à une date spécifique"""
+    responsables = load_responsables()
+    
+    # Calculer les créneaux horaires concernés (commence à 8h)
+    heure_debut_int = int(heure_debut.split(":")[0])
+    heure_fin_int = int(heure_fin.split(":")[0])
+    creneaux = list(range(heure_debut_int - 8, heure_fin_int - 8))
+    
+    year = date.year
+    month = date.month
+    day = date.day
+    
+    # Créer l'identifiant du tournoi
+    tournoi_info = f"TOURNOI|{niveau}|{genre}"
+    
+    # Bloquer les créneaux
+    for creneau in creneaux:
+        if terrain1:
+            key = f"{year}-{month}-{day}-{creneau}-terrain1"
+            responsables[key] = tournoi_info
+        if terrain2:
+            key = f"{year}-{month}-{day}-{creneau}-terrain2"
+            responsables[key] = tournoi_info
+    
+    save_responsables(responsables)
+    return True
+
+# Afficher les entraînements existants
+st.header("📋 Entraînements récurrents")
 
 try:
-    df = pd.read_csv("data/entrainements.csv")
-    st.dataframe(df, use_container_width=True)
+    df_entrainements = pd.read_csv(ENTRAINEMENTS_FILE)
+    st.dataframe(df_entrainements, use_container_width=True)
 except FileNotFoundError:
-    st.error("Fichier entrainements.csv introuvable.")
+    df_entrainements = pd.DataFrame(columns=["jour", "heure_debut", "heure_fin", "coach", "niveau", "genre", "terrain1", "terrain2"])
+    st.info("Aucun entraînement récurrent pour le moment.")
+
+st.divider()
+
+# Afficher les tournois existants
+st.header("🏆 Tournois programmés")
+
+try:
+    df_tournois = pd.read_csv(TOURNOIS_FILE)
+    st.dataframe(df_tournois, use_container_width=True)
+except FileNotFoundError:
+    df_tournois = pd.DataFrame(columns=["date", "heure_debut", "heure_fin", "niveau", "genre", "terrain1", "terrain2"])
+    st.info("Aucun tournoi programmé pour le moment.")
+
+st.divider()
+
+# Formulaire d'ajout d'entraînement dans un expander
+with st.expander("➕ Ajouter un entraînement récurrent", expanded=False):
+    with st.form("ajout_entrainement"):
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            jour = st.selectbox(
+                "Jour de la semaine",
+                ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
+            )
+            
+            heure_debut = st.time_input(
+                "Heure de début",
+                value=datetime.strptime("18:00", "%H:%M").time()
+            )
+            heure_fin = st.time_input(
+                "Heure de fin",
+                value=datetime.strptime("20:00", "%H:%M").time()
+            )
+        
+        with col2:
+            coach = st.text_input("Nom du coach")
+            
+            niveau = st.selectbox(
+                "Niveau",
+                ["Débutant", "Intermédiaire", "Avancé", "Compétition"]
+            )
+            
+            genre = st.selectbox(
+                "Genre",
+                ["Mixte", "Féminin", "Masculin"]
+            )
+            
+            col_t1, col_t2 = st.columns(2)
+            with col_t1:
+                terrain1 = st.checkbox("Terrain 1", value=True)
+            with col_t2:
+                terrain2 = st.checkbox("Terrain 2", value=False)
+        
+        submitted = st.form_submit_button("Ajouter l'entraînement", use_container_width=True)
+        
+        if submitted:
+            if not coach:
+                st.error("Veuillez entrer le nom du coach")
+            elif not terrain1 and not terrain2:
+                st.error("Veuillez sélectionner au moins un terrain")
+            else:
+                # Ajouter au CSV
+                nouvelle_ligne = pd.DataFrame([{
+                    "jour": jour,
+                    "heure_debut": heure_debut.strftime("%H:%M"),
+                    "heure_fin": heure_fin.strftime("%H:%M"),
+                    "coach": coach,
+                    "niveau": niveau,
+                    "genre": genre,
+                    "terrain1": "oui" if terrain1 else "non",
+                    "terrain2": "oui" if terrain2 else "non"
+                }])
+                
+                df_entrainements = pd.concat([df_entrainements, nouvelle_ligne], ignore_index=True)
+                df_entrainements.to_csv(ENTRAINEMENTS_FILE, index=False)
+                
+                # Créer l'identifiant d'entraînement
+                coach_info = f"ENTRAINEMENT|{coach}|{genre}|{niveau}"
+                
+                # Appliquer sur toute l'année
+                nb_occurrences = appliquer_entrainement_annee(
+                    jour,
+                    heure_debut.strftime("%H:%M"),
+                    heure_fin.strftime("%H:%M"),
+                coach_info,
+                terrain1,
+                terrain2
+            )
+            
+            st.success(f"✅ Entraînement ajouté avec succès ! {nb_occurrences} séances programmées sur l'année 2026.")
+            st.rerun()
+
+# Formulaire d'ajout de tournoi dans un expander
+with st.expander("🏆 Ajouter un tournoi", expanded=False):
+    with st.form("ajout_tournoi"):
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            date_tournoi = st.date_input(
+                "Date du tournoi",
+                value=datetime.now()
+            )
+            
+            heure_debut_tournoi = st.time_input(
+                "Heure de début",
+                value=datetime.strptime("09:00", "%H:%M").time()
+            )
+            
+            heure_fin_tournoi = st.time_input(
+                "Heure de fin",
+                value=datetime.strptime("18:00", "%H:%M").time()
+            )
+        
+        with col2:
+            niveau_tournoi = st.selectbox(
+                "Niveau",
+                ["S1", "S2", "S3", "Loisir"]
+            )
+            
+            genre_tournoi = st.selectbox(
+                "Genre",
+                ["Mixte", "Féminin", "Masculin"],
+                key="genre_tournoi"
+            )
+            
+            col_t1, col_t2 = st.columns(2)
+            with col_t1:
+                terrain1_tournoi = st.checkbox("Terrain 1", value=True, key="terrain1_tournoi")
+            with col_t2:
+                terrain2_tournoi = st.checkbox("Terrain 2", value=True, key="terrain2_tournoi")
+        
+        submitted_tournoi = st.form_submit_button("Ajouter le tournoi", use_container_width=True)
+        
+        if submitted_tournoi:
+            if not terrain1_tournoi and not terrain2_tournoi:
+                st.error("Veuillez sélectionner au moins un terrain")
+            else:
+                # Ajouter au CSV
+                nouvelle_ligne_tournoi = pd.DataFrame([{
+                    "date": date_tournoi.strftime("%Y-%m-%d"),
+                    "heure_debut": heure_debut_tournoi.strftime("%H:%M"),
+                    "heure_fin": heure_fin_tournoi.strftime("%H:%M"),
+                    "niveau": niveau_tournoi,
+                    "genre": genre_tournoi,
+                    "terrain1": "oui" if terrain1_tournoi else "non",
+                    "terrain2": "oui" if terrain2_tournoi else "non"
+                }])
+                
+                df_tournois = pd.concat([df_tournois, nouvelle_ligne_tournoi], ignore_index=True)
+                os.makedirs("data", exist_ok=True)
+                df_tournois.to_csv(TOURNOIS_FILE, index=False)
+                
+                # Bloquer les créneaux
+                bloquer_tournoi(
+                    date_tournoi,
+                    heure_debut_tournoi.strftime("%H:%M"),
+                    heure_fin_tournoi.strftime("%H:%M"),
+                    niveau_tournoi,
+                    genre_tournoi,
+                    terrain1_tournoi,
+                    terrain2_tournoi
+                )
+                
+                st.success(f"✅ Tournoi ajouté avec succès pour le {date_tournoi.strftime('%d/%m/%Y')} !")
+                st.rerun()
+
+st.divider()
+
+# Bouton pour réappliquer tous les entraînements
+st.header("🔄 Gestion")
+
+col1, col2 = st.columns(2)
+
+with col1:
+    if st.button("Réappliquer tous les entraînements sur l'année 2026", use_container_width=True):
+        try:
+            df_entrainements = pd.read_csv(ENTRAINEMENTS_FILE)
+            total = 0
+            for _, row in df_entrainements.iterrows():
+                terrain1 = row["terrain1"] == "oui"
+                terrain2 = row["terrain2"] == "oui"
+                # Créer un identifiant d'entraînement au format: "ENTRAINEMENT|coach|genre|niveau"
+                coach_info = f"ENTRAINEMENT|{row['coach']}|{row.get('genre', 'Mixte')}|{row['niveau']}"
+                nb = appliquer_entrainement_annee(
+                    row["jour"],
+                    row["heure_debut"],
+                    row["heure_fin"],
+                    coach_info,
+                    terrain1,
+                    terrain2
+                )
+                total += nb
+            st.success(f"✅ {total} séances programmées sur toute l'année !")
+            st.info("💡 Retournez sur la page Calendrier pour voir les entraînements apparaître en violet.")
+        except Exception as e:
+            st.error(f"Erreur : {e}")
+
+with col2:
+    if st.button("Réappliquer tous les tournois", use_container_width=True):
+        try:
+            df_tournois = pd.read_csv(TOURNOIS_FILE)
+            total = 0
+            for _, row in df_tournois.iterrows():
+                terrain1 = row["terrain1"] == "oui"
+                terrain2 = row["terrain2"] == "oui"
+                date_tournoi = datetime.strptime(row["date"], "%Y-%m-%d")
+                bloquer_tournoi(
+                    date_tournoi,
+                    row["heure_debut"],
+                    row["heure_fin"],
+                    row["niveau"],
+                    row["genre"],
+                    terrain1,
+                    terrain2
+                )
+                total += 1
+            st.success(f"✅ {total} tournoi(s) reprogrammé(s) !")
+            st.info("💡 Retournez sur la page Calendrier pour voir les tournois.")
+        except Exception as e:
+            st.error(f"Erreur : {e}")
