@@ -1,5 +1,5 @@
 import streamlit as st
-import calendar
+from streamlit_calendar import calendar
 from datetime import datetime, timedelta
 import pandas as pd
 import json
@@ -29,9 +29,6 @@ def save_responsables(responsables):
 # ---------------------------
 # Initialisation session
 # ---------------------------
-if "current_date" not in st.session_state:
-    st.session_state.current_date = datetime.today()
-
 if "selected_day" not in st.session_state:
     st.session_state.selected_day = None
 
@@ -39,134 +36,132 @@ if "responsables" not in st.session_state:
     st.session_state.responsables = load_responsables()
 
 # ---------------------------
+# Configuration du calendrier
+# ---------------------------
+def get_calendar_events():
+    """Génère les événements pour le calendrier"""
+    events = []
+    responsables = st.session_state.responsables
+    
+    # Boucler sur toutes les dates des 12 derniers/prochains mois
+    now = datetime.now()
+    for month_offset in range(-6, 7):
+        check_date = now + timedelta(days=30*month_offset)
+        year = check_date.year
+        month = check_date.month
+        
+        # Boucler sur chaque jour du mois
+        for day in range(1, 32):
+            try:
+                current_day = datetime(year, month, day)
+            except ValueError:
+                continue
+            
+            # Boucler sur chaque créneau horaire
+            for hour in range(14):
+                key_terrain1 = f"{year}-{month}-{day}-{hour}-terrain1"
+                key_terrain2 = f"{year}-{month}-{day}-{hour}-terrain2"
+                
+                responsable1 = responsables.get(key_terrain1, "")
+                responsable2 = responsables.get(key_terrain2, "")
+                
+                terrains_ouverts = 0
+                responsables_count = 0
+                if responsable1:
+                    terrains_ouverts += 1
+                    responsables_count += 1
+                if responsable2:
+                    terrains_ouverts += 1
+                    if responsable2 != responsable1:
+                        responsables_count += 1
+                
+                # Créer un événement si ce créneau est ouvert
+                if terrains_ouverts > 0:
+                    places_totales_creneau = terrains_ouverts * 4
+                    key_joueurs = f"{year}-{month}-{day}-{hour}-joueurs"
+                    joueurs_count = len(responsables.get(key_joueurs, []))
+                    places_occupees_creneau = responsables_count + joueurs_count
+                    pourcentage_creneau = (places_occupees_creneau / places_totales_creneau * 100) if places_totales_creneau > 0 else 0
+                    
+                    # Horaire du créneau
+                    heure_debut = 8 + hour
+                    heure_fin = heure_debut + 1
+                    title = f"{heure_debut}h-{heure_fin}h ({places_occupees_creneau}/{places_totales_creneau})"
+                    
+                    # Déterminer la couleur en fonction du remplissage
+                    if pourcentage_creneau >= 100:
+                        color = "#000000"  # Noir - plein
+                    elif pourcentage_creneau <= 25:
+                        color = "#00cc96"  # Vert
+                    elif pourcentage_creneau < 50:
+                        color = "#ffd60a"  # Jaune
+                    elif pourcentage_creneau < 75:
+                        color = "#ff9016"  # Orange
+                    else:
+                        color = "#ff4136"  # Rouge
+                    
+                    # Créer l'heure de début et fin spécifique pour ce créneau
+                    start_datetime = datetime(year, month, day, heure_debut, 0)
+                    end_datetime = datetime(year, month, day, heure_fin, 0)
+                    
+                    events.append({
+                        "title": title,
+                        "start": start_datetime.isoformat(),
+                        "end": end_datetime.isoformat(),
+                        "color": color
+                    })
+    
+    return events
+
+def get_calendar_options():
+    """Retourne les options de configuration pour le calendrier"""
+    return {
+        "headerToolbar": {
+            "left": "prev,next today",
+            "center": "title",
+            "right": "dayGridMonth,timeGridWeek"
+        },
+        "locale": "fr",
+        "editable": False,
+        "selectable": True,
+        "height": "auto",
+    }
+
+# ---------------------------
 # Affichage calendrier ou page jour
 # ---------------------------
 if st.session_state.selected_day is None:
-
     st.title("📅 Calendrier du club")
-
-    # ---------------------------
-    # Navigation mois
-    # ---------------------------
-    def mois_precedent():
-        date = st.session_state.current_date
-        year = date.year
-        month = date.month - 1
-        if month == 0:
-            month = 12
-            year -= 1
-        st.session_state.current_date = date.replace(year=year, month=month)
-
-    def mois_suivant():
-        date = st.session_state.current_date
-        year = date.year
-        month = date.month + 1
-        if month == 13:
-            month = 1
-            year += 1
-        st.session_state.current_date = date.replace(year=year, month=month)
-
-    # Header navigation - centré avec 7 colonnes comme le calendrier
-    cols_header = st.columns(7)
-    with cols_header[0]:
-        st.button("⬅️", on_click=mois_precedent, use_container_width=True)
     
-    # Mapper les mois en français
-    mois_fr = {
-        1: "Janvier", 2: "Février", 3: "Mars", 4: "Avril", 5: "Mai", 6: "Juin",
-        7: "Juillet", 8: "Août", 9: "Septembre", 10: "Octobre", 11: "Novembre", 12: "Décembre"
-    }
-    mois_nom = mois_fr[st.session_state.current_date.month]
-    annee = st.session_state.current_date.year
+    # Récupérer les événements
+    events = get_calendar_events()
+    calendar_options = get_calendar_options()
     
-    with cols_header[1]:
-        pass
-    with cols_header[2]:
-        pass
-    with cols_header[3]:
-        st.markdown(f"<h4 style='text-align: center; margin: 0'>{mois_nom} {annee}</h4>", unsafe_allow_html=True)
-    with cols_header[4]:
-        pass
-    with cols_header[5]:
-        pass
-    with cols_header[6]:
-        st.button("➡️", on_click=mois_suivant, use_container_width=True)
-
-    st.divider()
-
-    # Génération calendrier
-    year = st.session_state.current_date.year
-    month = st.session_state.current_date.month
-    cal = calendar.Calendar(firstweekday=0)
-    month_days = cal.monthdayscalendar(year, month)
-    jours = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"]
+    # Afficher le calendrier
+    calendar_events = calendar(
+        events=events,
+        options=calendar_options,
+        key="beach_calendar"
+    )
     
-    # Fonction pour calculer les places restantes pour un jour
-    def get_places_info(day):
-        places_totales = 0
-        places_occupees = 0
-        for hour in range(14):
-            key_terrain1 = f"{year}-{month}-{day}-{hour}-terrain1"
-            key_terrain2 = f"{year}-{month}-{day}-{hour}-terrain2"
-            
-            responsable1 = st.session_state.responsables.get(key_terrain1, "")
-            responsable2 = st.session_state.responsables.get(key_terrain2, "")
-            
-            terrains_ouverts = 0
-            responsables_count = 0
-            if responsable1:
-                terrains_ouverts += 1
-                responsables_count += 1
-            if responsable2:
-                terrains_ouverts += 1
-                if responsable2 != responsable1:
-                    responsables_count += 1
-            
-            if terrains_ouverts > 0:
-                places_totales += terrains_ouverts * 4
-                key_joueurs = f"{year}-{month}-{day}-{hour}-joueurs"
-                joueurs_count = len(st.session_state.responsables.get(key_joueurs, []))
-                # Compter les responsables + les joueurs sélectionnés
-                places_occupees += responsables_count + joueurs_count
-        
-        places_restantes = places_totales - places_occupees if places_totales > 0 else 0
-        pourcentage = ((places_totales - places_restantes) / places_totales * 100) if places_totales > 0 else 0
-        return places_totales, places_restantes, pourcentage
-
-    cols = st.columns(7)
-    for i,j in enumerate(jours):
-        cols[i].markdown(f"**{j}**")
-
-    # Affichage des jours
-    for week in month_days:
-        cols = st.columns(7)
-        for i, day in enumerate(week):
-            if day==0:
-                cols[i].write("")
-            else:
-                # Afficher avec les places restantes si le jour a des responsables
-                places_totales, places_restantes, pourcentage = get_places_info(day)
-                if places_totales > 0:
-                    # Déterminer l'emoji selon le pourcentage
-                    if pourcentage <= 25:
-                        emoji = "🟢"  # Vert
-                    elif pourcentage < 50:
-                        emoji = "🟡"  # Jaune
-                    elif pourcentage < 75:
-                        emoji = "🟠"  # Orange
-                    else:
-                        emoji = "🔴"  # Rouge
-                    
-                    places_occupees = places_totales - places_restantes
-                    if cols[i].button(f"{emoji} {day} ({places_occupees}/{places_totales})", key=f"{year}-{month}-{day}"):
-                        st.session_state.selected_day = datetime(year, month, day)
-                        save_responsables(st.session_state.responsables)
-                        st.rerun()
-                else:
-                    if cols[i].button(str(day), key=f"{year}-{month}-{day}"):
-                        st.session_state.selected_day = datetime(year, month, day)
-                        save_responsables(st.session_state.responsables)
-                        st.rerun()
+    # Gérer la sélection d'une date via eventClick ou dateClick (clic sur un jour)
+    if calendar_events:
+        if calendar_events.get("callback") == "eventClick":
+            event = calendar_events["eventClick"]["event"]
+            start_str = event["start"]
+            # Parser la date ISO (ex: "2026-02-07T00:00:00+01:00")
+            selected_date = datetime.fromisoformat(start_str.replace("Z", "+00:00")).date()
+            selected_datetime = datetime(selected_date.year, selected_date.month, selected_date.day)
+            st.session_state.selected_day = selected_datetime
+            st.rerun()
+        elif calendar_events.get("callback") == "dateClick":
+            # Clic sur un jour (même sans événement)
+            date_str = calendar_events["dateClick"]["date"]
+            # Parser la date ISO (ex: "2026-02-13T23:00:00.000Z")
+            selected_date = datetime.fromisoformat(date_str.replace("Z", "+00:00")).date()
+            selected_datetime = datetime(selected_date.year, selected_date.month, selected_date.day)
+            st.session_state.selected_day = selected_datetime
+            st.rerun()
 
 else:
     # ---------------------------
