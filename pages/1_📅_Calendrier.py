@@ -215,6 +215,7 @@ def get_calendar_options():
             "right": "dayGridMonth,timeGridWeek"
         },
         "locale": "fr",
+        "timeZone": "Europe/Paris",  # Utiliser le fuseau horaire français
         "firstDay": 1,  # Commence le lundi (0=dimanche, 1=lundi)
         "displayEventEnd": True,  # Afficher l'heure de fin des événements
         "eventTimeFormat": {  # Format court pour les heures (sans minutes si :00)
@@ -251,17 +252,19 @@ if st.session_state.selected_day is None:
         if calendar_events.get("callback") == "eventClick":
             event = calendar_events["eventClick"]["event"]
             start_str = event["start"]
-            # Parser la date ISO (ex: "2026-02-07T00:00:00+01:00")
-            selected_date = datetime.fromisoformat(start_str.replace("Z", "+00:00")).date()
-            selected_datetime = datetime(selected_date.year, selected_date.month, selected_date.day)
+            # Extraire uniquement la partie date (YYYY-MM-DD) sans tenir compte du fuseau horaire
+            date_part = start_str.split("T")[0]
+            year, month, day = map(int, date_part.split("-"))
+            selected_datetime = datetime(year, month, day)
             st.session_state.selected_day = selected_datetime
             st.rerun()
         elif calendar_events.get("callback") == "dateClick":
             # Clic sur un jour (même sans événement)
             date_str = calendar_events["dateClick"]["date"]
-            # Parser la date ISO (ex: "2026-02-13T23:00:00.000Z")
-            selected_date = datetime.fromisoformat(date_str.replace("Z", "+00:00")).date()
-            selected_datetime = datetime(selected_date.year, selected_date.month, selected_date.day)
+            # Extraire uniquement la partie date (YYYY-MM-DD) sans tenir compte du fuseau horaire
+            date_part = date_str.split("T")[0]
+            year, month, day = map(int, date_part.split("-"))
+            selected_datetime = datetime(year, month, day)
             st.session_state.selected_day = selected_datetime
             st.rerun()
 
@@ -269,6 +272,12 @@ else:
     # ---------------------------
     # Page jour
     # ---------------------------
+    # Bouton de retour au calendrier en haut
+    if st.button("⬅️ Retour au calendrier", key="retour_haut"):
+        st.session_state.selected_day = None
+        save_responsables(st.session_state.responsables)
+        st.rerun()
+    
     day = st.session_state.selected_day
     
     # Traduire le jour et le mois en français
