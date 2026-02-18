@@ -86,7 +86,7 @@ def get_calendar_events():
                     # Horaire du créneau
                     heure_debut = 8 + hour
                     heure_fin = heure_debut + 1
-                    title = f"{heure_debut}h-{heure_fin}h ({places_occupees_creneau}/{places_totales_creneau})"
+                    title = f"({places_occupees_creneau}/{places_totales_creneau})"
                     
                     # Déterminer la couleur en fonction du remplissage
                     if pourcentage_creneau >= 100:
@@ -168,7 +168,17 @@ else:
     # Page jour
     # ---------------------------
     day = st.session_state.selected_day
-    st.title(f"📅 {day.strftime('%A %d %B %Y')}")
+    
+    # Traduire le jour et le mois en français
+    jours_fr = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
+    mois_fr = ["", "janvier", "février", "mars", "avril", "mai", "juin", 
+               "juillet", "août", "septembre", "octobre", "novembre", "décembre"]
+    
+    jour_semaine = jours_fr[day.weekday()]
+    nom_mois = mois_fr[day.month]
+    titre_jour = f"{jour_semaine.capitalize()} {day.day} {nom_mois} {day.year}"
+    
+    st.title(f"📅 {titre_jour}")
 
     st.write("### Créneaux horaires (1h)")
     
@@ -189,121 +199,139 @@ else:
         staffers = [""]
         st.error("Fichier membres.csv introuvable.")
 
+    # Style CSS pour séparer les colonnes
+    st.markdown("""
+        <style>
+        [data-testid="column"]:first-child {
+            border-right: 2px solid #e0e0e0;
+            padding-right: 1rem;
+        }
+        [data-testid="column"]:last-child {
+            padding-left: 1rem;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+    
     start_time = datetime(day.year, day.month, day.day, 8)
-    for i in range(14):
-        heure_debut = start_time + timedelta(hours=i)
-        heure_fin = heure_debut + timedelta(hours=1)
+    
+    # Afficher les créneaux par paires (2 par ligne)
+    for row in range(7):  # 7 lignes pour 14 créneaux
+        cols = st.columns(2)
         
-        # Clés pour les terrains
-        key_terrain1 = f"{day.year}-{day.month}-{day.day}-{i}-terrain1"
-        key_terrain2 = f"{day.year}-{day.month}-{day.day}-{i}-terrain2"
-        
-        # Calculer le pourcentage de remplissage pour ce créneau
-        responsable1 = st.session_state.responsables.get(key_terrain1, "")
-        responsable2 = st.session_state.responsables.get(key_terrain2, "")
-        
-        terrains_ouverts_creneau = 0
-        responsables_count_creneau = 0
-        if responsable1:
-            terrains_ouverts_creneau += 1
-            responsables_count_creneau += 1
-        if responsable2:
-            terrains_ouverts_creneau += 1
-            if responsable2 != responsable1:
-                responsables_count_creneau += 1
-        
-        # Déterminer l'emoji selon le remplissage du créneau
-        emoji_creneau = ""
-        if terrains_ouverts_creneau > 0:
-            places_totales_creneau = terrains_ouverts_creneau * 4
-            key_joueurs = f"{day.year}-{day.month}-{day.day}-{i}-joueurs"
-            joueurs_count = len(st.session_state.responsables.get(key_joueurs, []))
-            places_occupees_creneau = responsables_count_creneau + joueurs_count
-            pourcentage_creneau = (places_occupees_creneau / places_totales_creneau * 100) if places_totales_creneau > 0 else 0
+        for col_idx in range(2):
+            i = row * 2 + col_idx  # Index du créneau (0 à 13)
             
-            if pourcentage_creneau <= 25:
-                emoji_creneau = "🟢"  # Vert
-            elif pourcentage_creneau < 50:
-                emoji_creneau = "🟡"  # Jaune
-            elif pourcentage_creneau < 75:
-                emoji_creneau = "🟠"  # Orange
-            else:
-                emoji_creneau = "🔴"  # Rouge
-        
-        st.write(f"🕒 {heure_debut.strftime('%H:%M')} - {heure_fin.strftime('%H:%M')} {emoji_creneau}")
-        
-        # Terrain 1 et 2 - Responsables
-        col1, col2 = st.columns(2)
-        with col1:
-            st.write("**Terrain 1**")
-            current_resp1 = st.session_state.responsables.get(key_terrain1, "")
-            responsable1 = st.selectbox(
-                "Responsable",
-                staffers,
-                index=staffers.index(current_resp1) if current_resp1 in staffers else 0,
-                key=f"responsable_terrain1_{key_terrain1}",
-                label_visibility="collapsed"
-            )
-            st.session_state.responsables[key_terrain1] = responsable1
-        
-        with col2:
-            st.write("**Terrain 2**")
-            current_resp2 = st.session_state.responsables.get(key_terrain2, "")
-            responsable2 = st.selectbox(
-                "Responsable",
-                staffers,
-                index=staffers.index(current_resp2) if current_resp2 in staffers else 0,
-                key=f"responsable_terrain2_{key_terrain2}",
-                label_visibility="collapsed"
-            )
-            st.session_state.responsables[key_terrain2] = responsable2
-        
-        # Déterminer si les terrains sont ouverts et le max de joueurs
-        terrains_ouverts = 0
-        if responsable1:
-            terrains_ouverts += 1
-        if responsable2:
-            terrains_ouverts += 1
-        
-        max_joueurs = terrains_ouverts * 4 if terrains_ouverts > 0 else 0
-        
-        # Ajouter les joueurs si au moins un terrain est ouvert
-        if terrains_ouverts > 0:
-            # Créer la liste des responsables obligatoires
-            responsables_joueurs = []
-            if responsable1:
-                responsables_joueurs.append(responsable1)
-            if responsable2 and responsable2 != responsable1:
-                responsables_joueurs.append(responsable2)
-            
-            # Filtrer les membres disponibles (exclure vides, responsables)
-            membres_disponibles = []
-            for m in membres[1:]:
-                if m != responsable1 and m != responsable2:
-                    membres_disponibles.append(m)
-            
-            key_joueurs = f"{day.year}-{day.month}-{day.day}-{i}-joueurs"
-            current_joueurs = st.session_state.responsables.get(key_joueurs, [])
-            
-            # Filtrer les joueurs courants pour enlever les responsables et les doublons
-            joueurs_valides = [j for j in current_joueurs if j in membres_disponibles]
-            
-            joueurs_selectionnes = st.multiselect(
-                f"Joueurs inscrits (max {max_joueurs})",
-                membres_disponibles,
-                default=joueurs_valides,
-                max_selections=max_joueurs - len(responsables_joueurs),
-                key=f"joueurs_{key_joueurs}",
-                label_visibility="collapsed"
-            )
-            
-            # Combiner responsables + joueurs sélectionnés pour la sauvegarde
-            tous_les_joueurs = responsables_joueurs + joueurs_selectionnes
-            st.session_state.responsables[key_joueurs] = joueurs_selectionnes
-            
-            st.write(f"**{len(tous_les_joueurs)}/{max_joueurs} places** (dont {len(responsables_joueurs)} responsable{'s' if len(responsables_joueurs) > 1 else ''})")
-        
-        st.divider()
+            with cols[col_idx]:
+                heure_debut = start_time + timedelta(hours=i)
+                heure_fin = heure_debut + timedelta(hours=1)
+                
+                # Clés pour les terrains
+                key_terrain1 = f"{day.year}-{day.month}-{day.day}-{i}-terrain1"
+                key_terrain2 = f"{day.year}-{day.month}-{day.day}-{i}-terrain2"
+                
+                # Calculer le pourcentage de remplissage pour ce créneau
+                responsable1 = st.session_state.responsables.get(key_terrain1, "")
+                responsable2 = st.session_state.responsables.get(key_terrain2, "")
+                
+                terrains_ouverts_creneau = 0
+                responsables_count_creneau = 0
+                if responsable1:
+                    terrains_ouverts_creneau += 1
+                    responsables_count_creneau += 1
+                if responsable2:
+                    terrains_ouverts_creneau += 1
+                    if responsable2 != responsable1:
+                        responsables_count_creneau += 1
+                
+                # Déterminer l'emoji selon le remplissage du créneau
+                emoji_creneau = ""
+                if terrains_ouverts_creneau > 0:
+                    places_totales_creneau = terrains_ouverts_creneau * 4
+                    key_joueurs = f"{day.year}-{day.month}-{day.day}-{i}-joueurs"
+                    joueurs_count = len(st.session_state.responsables.get(key_joueurs, []))
+                    places_occupees_creneau = responsables_count_creneau + joueurs_count
+                    pourcentage_creneau = (places_occupees_creneau / places_totales_creneau * 100) if places_totales_creneau > 0 else 0
+                    
+                    if pourcentage_creneau <= 25:
+                        emoji_creneau = "🟢"  # Vert
+                    elif pourcentage_creneau < 50:
+                        emoji_creneau = "🟡"  # Jaune
+                    elif pourcentage_creneau < 75:
+                        emoji_creneau = "🟠"  # Orange
+                    else:
+                        emoji_creneau = "🔴"  # Rouge
+                
+                st.write(f"🕒 {heure_debut.strftime('%H:%M')} - {heure_fin.strftime('%H:%M')} {emoji_creneau}")
+                
+                # Terrain 1 et 2 - Responsables
+                st.write("**Terrain 1**")
+                current_resp1 = st.session_state.responsables.get(key_terrain1, "")
+                responsable1 = st.selectbox(
+                    "Responsable",
+                    staffers,
+                    index=staffers.index(current_resp1) if current_resp1 in staffers else 0,
+                    key=f"responsable_terrain1_{key_terrain1}",
+                    label_visibility="collapsed"
+                )
+                st.session_state.responsables[key_terrain1] = responsable1
+                
+                st.write("**Terrain 2**")
+                current_resp2 = st.session_state.responsables.get(key_terrain2, "")
+                responsable2 = st.selectbox(
+                    "Responsable",
+                    staffers,
+                    index=staffers.index(current_resp2) if current_resp2 in staffers else 0,
+                    key=f"responsable_terrain2_{key_terrain2}",
+                    label_visibility="collapsed"
+                )
+                st.session_state.responsables[key_terrain2] = responsable2
+                
+                # Déterminer si les terrains sont ouverts et le max de joueurs
+                terrains_ouverts = 0
+                if responsable1:
+                    terrains_ouverts += 1
+                if responsable2:
+                    terrains_ouverts += 1
+                
+                max_joueurs = terrains_ouverts * 4 if terrains_ouverts > 0 else 0
+                
+                # Ajouter les joueurs si au moins un terrain est ouvert
+                if terrains_ouverts > 0:
+                    # Créer la liste des responsables obligatoires
+                    responsables_joueurs = []
+                    if responsable1:
+                        responsables_joueurs.append(responsable1)
+                    if responsable2 and responsable2 != responsable1:
+                        responsables_joueurs.append(responsable2)
+                    
+                    # Filtrer les membres disponibles (exclure vides, responsables)
+                    membres_disponibles = []
+                    for m in membres[1:]:
+                        if m != responsable1 and m != responsable2:
+                            membres_disponibles.append(m)
+                    
+                    key_joueurs = f"{day.year}-{day.month}-{day.day}-{i}-joueurs"
+                    current_joueurs = st.session_state.responsables.get(key_joueurs, [])
+                    
+                    # Filtrer les joueurs courants pour enlever les responsables et les doublons
+                    joueurs_valides = [j for j in current_joueurs if j in membres_disponibles]
+                    
+                    joueurs_selectionnes = st.multiselect(
+                        f"Joueurs inscrits (max {max_joueurs})",
+                        membres_disponibles,
+                        default=joueurs_valides,
+                        max_selections=max_joueurs - len(responsables_joueurs),
+                        key=f"joueurs_{key_joueurs}",
+                        label_visibility="collapsed"
+                    )
+                    
+                    # Combiner responsables + joueurs sélectionnés pour la sauvegarde
+                    tous_les_joueurs = responsables_joueurs + joueurs_selectionnes
+                    st.session_state.responsables[key_joueurs] = joueurs_selectionnes
+                    
+                    st.write(f"**{len(tous_les_joueurs)}/{max_joueurs} places** (dont {len(responsables_joueurs)} responsable{'s' if len(responsables_joueurs) > 1 else ''})")
+                
+                st.divider()
 
     # Sauvegarder les données après les modifications
     save_responsables(st.session_state.responsables)
