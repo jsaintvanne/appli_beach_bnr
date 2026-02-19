@@ -10,7 +10,22 @@ st.title("🏐 Planning des Entraînements et Tournois")
 ENTRAINEMENTS_FILE = "data/entrainements.csv"
 TOURNOIS_FILE = "data/tournois.csv"
 RESPONSABLES_FILE = "data/responsables.json"
+MEMBRES_FILE = "data/membres.csv"
 
+# Charger la liste des coachs
+def get_coachs():
+    """Retourne la liste des coachs depuis le fichier membres.csv"""
+    try:
+        df_membres = pd.read_csv(MEMBRES_FILE)
+        coachs_df = df_membres[df_membres["coach"] == "Oui"]
+        coachs = coachs_df["prenom"].str.cat(coachs_df["nom"], sep=" ").tolist()
+        return coachs
+    except FileNotFoundError:
+        st.error("Fichier membres.csv introuvable.")
+        return []
+    except Exception as e:
+        st.error(f"Erreur lors du chargement des coachs: {e}")
+        return []
 def load_responsables():
     """Charge les responsables depuis le fichier JSON"""
     if os.path.exists(RESPONSABLES_FILE):
@@ -98,7 +113,7 @@ def appliquer_entrainement_annee(jour_semaine, heure_debut, heure_fin, coach, te
         current_date += timedelta(days=1)
     
     save_responsables(responsables)
-    return count
+    return True, []
 
 def bloquer_tournoi(date, heure_debut, heure_fin, niveau, genre, terrain1, terrain2):
     """Bloque les créneaux pour un tournoi à une date spécifique avec vérification de conflits"""
@@ -142,7 +157,7 @@ def bloquer_tournoi(date, heure_debut, heure_fin, niveau, genre, terrain1, terra
             responsables[key] = tournoi_info
     
     save_responsables(responsables)
-    return 1, []  # Retourner 1 pour indiquer le succès (un tournoi)
+    return True, []  # Retourner succès
 
 
 # Afficher les entraînements existants
@@ -150,6 +165,16 @@ st.header("📋 Entraînements récurrents")
 
 try:
     df_entrainements = pd.read_csv(ENTRAINEMENTS_FILE)
+    
+    # Trier par ordre de jour de la semaine puis par heure de début
+    jours_ordre = {
+        "Lundi": 0, "Mardi": 1, "Mercredi": 2, "Jeudi": 3,
+        "Vendredi": 4, "Samedi": 5, "Dimanche": 6
+    }
+    df_entrainements['_ordre_jour'] = df_entrainements['jour'].map(jours_ordre)
+    df_entrainements = df_entrainements.sort_values(by=['_ordre_jour', 'heure_debut'])
+    df_entrainements = df_entrainements.drop(columns=['_ordre_jour'])
+    
     st.dataframe(df_entrainements, use_container_width=True, hide_index=True)
 except FileNotFoundError:
     df_entrainements = pd.DataFrame(columns=["jour", "heure_debut", "heure_fin", "coach", "niveau", "genre", "terrain1", "terrain2"])
@@ -162,6 +187,10 @@ st.header("🏆 Tournois programmés")
 
 try:
     df_tournois = pd.read_csv(TOURNOIS_FILE)
+    
+    # Trier par date puis par heure de début
+    df_tournois = df_tournois.sort_values(by=['date', 'heure_debut'])
+    
     st.dataframe(df_tournois, use_container_width=True, hide_index=True)
 except FileNotFoundError:
     df_tournois = pd.DataFrame(columns=["date", "heure_debut", "heure_fin", "niveau", "genre", "terrain1", "terrain2"])
@@ -190,7 +219,12 @@ with st.expander("➕ Ajouter un entraînement récurrent", expanded=False):
             )
         
         with col2:
-            coach = st.text_input("Nom du coach")
+            coachs = get_coachs()
+            if not coachs:
+                st.warning("Aucun coach disponible. Ajoutez des membres avec le rôle 'coach' dans la page Membres.")
+                coach = ""
+            else:
+                coach = st.selectbox("Coach", coachs)
             
             niveau = st.selectbox(
                 "Niveau",
@@ -229,14 +263,13 @@ with st.expander("➕ Ajouter un entraînement récurrent", expanded=False):
                     terrain2
                 )
                 
-                if not success and conflits:
+                if not success:
                     st.error("❌ **ATTENTION : Impossible d'ajouter cet entraînement !**")
                     st.error("Les créneaux suivants sont déjà occupés sur le terrain sélectionné :")
                     with st.expander("📋 Voir la liste complète des conflits", expanded=True):
                         for conflit in conflits:
                             st.write(f"• {conflit}")
                     st.info("💡 Veuillez modifier l'heure ou le jour de l'entraînement pour éviter ces conflits.")
-                    st.stop()  # Arrêter l'exécution pour keeper le message visible
                 else:
                     # Ajouter au CSV
                     nouvelle_ligne = pd.DataFrame([{
@@ -253,7 +286,7 @@ with st.expander("➕ Ajouter un entraînement récurrent", expanded=False):
                     df_entrainements = pd.concat([df_entrainements, nouvelle_ligne], ignore_index=True)
                     df_entrainements.to_csv(ENTRAINEMENTS_FILE, index=False)
             
-                    st.success(f"✅ Entraînement ajouté avec succès ! {success} séances programmées sur l'année 2026.")
+                    st.success(f"✅ Entraînement ajouté avec succès pour tous les {jour}s de l'année 2026 !")
                     st.rerun()
 
 # Formulaire d'ajout de tournoi dans un expander
@@ -312,14 +345,13 @@ with st.expander("🏆 Ajouter un tournoi", expanded=False):
                     terrain2_tournoi
                 )
                 
-                if not success and conflits:
+                if not success:
                     st.error("❌ **ATTENTION : Impossible d'ajouter ce tournoi !**")
                     st.error("Les créneaux suivants sont déjà occupés sur le terrain sélectionné :")
                     with st.expander("📋 Voir la liste complète des conflits", expanded=True):
                         for conflit in conflits:
                             st.write(f"• {conflit}")
                     st.info("💡 Veuillez modifier l'heure ou la date du tournoi pour éviter ces conflits.")
-                    st.stop()  # Arrêter l'exécution pour keeper le message visible
                 else:
                     # Ajouter au CSV
                     nouvelle_ligne_tournoi = pd.DataFrame([{
@@ -350,7 +382,7 @@ with col1:
     if st.button("Réappliquer tous les entraînements sur l'année 2026", use_container_width=True):
         try:
             df_entrainements = pd.read_csv(ENTRAINEMENTS_FILE)
-            total = 0
+            count = 0
             for _, row in df_entrainements.iterrows():
                 terrain1 = row["terrain1"] == "oui"
                 terrain2 = row["terrain2"] == "oui"
@@ -365,8 +397,8 @@ with col1:
                     terrain2
                 )
                 if success:
-                    total += success
-            st.success(f"✅ {total} séances programmées sur toute l'année !")
+                    count += 1
+            st.success(f"✅ {count} entraînements réappliqués avec succès !")
             st.info("💡 Retournez sur la page Calendrier pour voir les entraînements apparaître en violet.")
         except Exception as e:
             st.error(f"Erreur : {e}")
@@ -375,7 +407,7 @@ with col2:
     if st.button("Réappliquer tous les tournois", use_container_width=True):
         try:
             df_tournois = pd.read_csv(TOURNOIS_FILE)
-            total = 0
+            count = 0
             for _, row in df_tournois.iterrows():
                 terrain1 = row["terrain1"] == "oui"
                 terrain2 = row["terrain2"] == "oui"
@@ -390,8 +422,8 @@ with col2:
                     terrain2
                 )
                 if success:
-                    total += success
-            st.success(f"✅ {total} tournoi(s) reprogrammé(s) !")
+                    count += 1
+            st.success(f"✅ {count} tournoi(s) reprogrammé(s) !")
             st.info("💡 Retournez sur la page Calendrier pour voir les tournois.")
         except Exception as e:
             st.error(f"Erreur : {e}")

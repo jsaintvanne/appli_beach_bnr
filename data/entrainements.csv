@@ -1,8 +1,4 @@
 jour,heure_debut,heure_fin,coach,niveau,genre,terrain1,terrain2
-Lundi,18:00,20:00,Thomas,Débutant,Mixte,oui,non
-Mercredi,19:00,21:00,Sophie,Intermédiaire,Féminin,oui,oui
-Vendredi,18:30,20:30,Thomas,Avancé,Masculin,oui,non
-Mardi,18:00,20:00,Bastien Fleuret,Compétition,Féminin,oui,non
-Lundi,18:00,20:00,Patate,Débutant,Mixte,non,oui
-Lundi,18:00,20:00,patate,Avancé,Mixte,oui,non
-Lundi,18:00,20:00,patate,Avancé,Mixte,oui,non
+Mardi,18:00,20:00,Bastien Fleuret,Compétition,Féminin,oui,oui
+Lundi,18:00,20:00,Marie Martin,Débutant,Mixte,oui,non
+Lundi,18:00,20:00,Marie Martin,Intermédiaire,Mixte,non,oui

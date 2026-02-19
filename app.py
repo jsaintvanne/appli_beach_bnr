@@ -36,7 +36,7 @@ st.markdown("""
 # Créer la navigation personnalisée
 accueil = st.Page("pages/0_🏠_Accueil.py", title="Accueil", icon="🏠")
 calendrier = st.Page("pages/1_📅_Calendrier.py", title="Calendrier", icon="📅")
-entrainements = st.Page("pages/2_🏐_Entrainements.py", title="Entrainements", icon="🏐")
+entrainements = st.Page("pages/2_🏐_Entrainements.py", title="Entrainements & Tournois", icon="🏐")
 membres = st.Page("pages/3_👥_Membres.py", title="Membres", icon="👥")
 
 pg = st.navigation([accueil, calendrier, entrainements, membres])

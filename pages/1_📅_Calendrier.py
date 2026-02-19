@@ -58,15 +58,12 @@ def get_calendar_events():
             except ValueError:
                 continue
             
-            # Tracker pour marquer les heures déjà traitées pour les entraînements/tournois
-            heures_traitees = set()
+            # Tracker pour marquer les heures déjà traitées pour chaque terrain
+            heures_traitees_terrain1 = set()
+            heures_traitees_terrain2 = set()
             
             # Boucler sur chaque créneau horaire
             for hour in range(14):
-                # Si cette heure a déjà été traitée, passer à la suivante
-                if hour in heures_traitees:
-                    continue
-                
                 key_terrain1 = f"{year}-{month}-{day}-{hour}-terrain1"
                 key_terrain2 = f"{year}-{month}-{day}-{hour}-terrain2"
                 
@@ -79,21 +76,23 @@ def get_calendar_events():
                 is_tournoi1 = responsable1.startswith("TOURNOI|") if responsable1 else False
                 is_tournoi2 = responsable2.startswith("TOURNOI|") if responsable2 else False
                 
-                # Si c'est un entraînement, trouver la plage complète
-                if is_entrainement1 or is_entrainement2:
-                    entrainement_info = responsable1 if is_entrainement1 else responsable2
-                    terrain_cle = "terrain1" if is_entrainement1 else "terrain2"
+                # Si c'est le même entraînement sur les deux terrains, créer un seul événement
+                if is_entrainement1 and is_entrainement2 and responsable1 == responsable2 and hour not in heures_traitees_terrain1:
+                    entrainement_info = responsable1
                     
                     # Trouver toutes les heures consécutives avec le même entraînement
                     heure_debut_event = hour
                     heure_fin_event = hour + 1
                     
                     for next_hour in range(hour + 1, 14):
-                        next_key = f"{year}-{month}-{day}-{next_hour}-{terrain_cle}"
-                        next_resp = responsables.get(next_key, "")
-                        if next_resp == entrainement_info:
+                        next_key1 = f"{year}-{month}-{day}-{next_hour}-terrain1"
+                        next_key2 = f"{year}-{month}-{day}-{next_hour}-terrain2"
+                        next_resp1 = responsables.get(next_key1, "")
+                        next_resp2 = responsables.get(next_key2, "")
+                        if next_resp1 == entrainement_info and next_resp2 == entrainement_info:
                             heure_fin_event = next_hour + 1
-                            heures_traitees.add(next_hour)
+                            heures_traitees_terrain1.add(next_hour)
+                            heures_traitees_terrain2.add(next_hour)
                         else:
                             break
                     
@@ -118,23 +117,103 @@ def get_calendar_events():
                         "color": "#E9D5FF",  # Lavande pastel pour les entraînements
                         "textColor": "#1f2937"  # Texte noir
                     })
-                    continue  # Passer au créneau suivant
+                    continue
                 
-                # Si c'est un tournoi, trouver la plage complète
-                if is_tournoi1 or is_tournoi2:
-                    tournoi_info = responsable1 if is_tournoi1 else responsable2
-                    terrain_cle = "terrain1" if is_tournoi1 else "terrain2"
+                # Traiter les entraînements du terrain 1
+                if is_entrainement1 and hour not in heures_traitees_terrain1:
+                    entrainement_info = responsable1
+                    
+                    # Trouver toutes les heures consécutives avec le même entraînement
+                    heure_debut_event = hour
+                    heure_fin_event = hour + 1
+                    
+                    for next_hour in range(hour + 1, 14):
+                        next_key = f"{year}-{month}-{day}-{next_hour}-terrain1"
+                        next_resp = responsables.get(next_key, "")
+                        if next_resp == entrainement_info:
+                            heure_fin_event = next_hour + 1
+                            heures_traitees_terrain1.add(next_hour)
+                        else:
+                            break
+                    
+                    # Parser les infos de l'entraînement
+                    parts = entrainement_info.split("|")
+                    if len(parts) == 4:
+                        coach = parts[1]
+                        genre = parts[2]
+                        niveau = parts[3]
+                        title = f"🏐 T1: {genre} - {niveau}"
+                    else:
+                        title = "🏐 Terrain 1"
+                    
+                    # Créer l'événement pour toute la plage
+                    start_datetime = datetime(year, month, day, 8 + heure_debut_event, 0)
+                    end_datetime = datetime(year, month, day, 8 + heure_fin_event, 0)
+                    
+                    events.append({
+                        "title": title,
+                        "start": start_datetime.isoformat(),
+                        "end": end_datetime.isoformat(),
+                        "color": "#E9D5FF",  # Lavande pastel pour les entraînements
+                        "textColor": "#1f2937"  # Texte noir
+                    })
+                
+                # Traiter les entraînements du terrain 2
+                if is_entrainement2 and hour not in heures_traitees_terrain2:
+                    entrainement_info = responsable2
+                    
+                    # Trouver toutes les heures consécutives avec le même entraînement
+                    heure_debut_event = hour
+                    heure_fin_event = hour + 1
+                    
+                    for next_hour in range(hour + 1, 14):
+                        next_key = f"{year}-{month}-{day}-{next_hour}-terrain2"
+                        next_resp = responsables.get(next_key, "")
+                        if next_resp == entrainement_info:
+                            heure_fin_event = next_hour + 1
+                            heures_traitees_terrain2.add(next_hour)
+                        else:
+                            break
+                    
+                    # Parser les infos de l'entraînement
+                    parts = entrainement_info.split("|")
+                    if len(parts) == 4:
+                        coach = parts[1]
+                        genre = parts[2]
+                        niveau = parts[3]
+                        title = f"🏐 T2: {genre} - {niveau}"
+                    else:
+                        title = "🏐 Terrain 2"
+                    
+                    # Créer l'événement pour toute la plage
+                    start_datetime = datetime(year, month, day, 8 + heure_debut_event, 0)
+                    end_datetime = datetime(year, month, day, 8 + heure_fin_event, 0)
+                    
+                    events.append({
+                        "title": title,
+                        "start": start_datetime.isoformat(),
+                        "end": end_datetime.isoformat(),
+                        "color": "#E9D5FF",  # Lavande pastel pour les entraînements
+                        "textColor": "#1f2937"  # Texte noir
+                    })
+                
+                # Si c'est le même tournoi sur les deux terrains, créer un seul événement
+                if is_tournoi1 and is_tournoi2 and responsable1 == responsable2 and hour not in heures_traitees_terrain1:
+                    tournoi_info = responsable1
                     
                     # Trouver toutes les heures consécutives avec le même tournoi
                     heure_debut_event = hour
                     heure_fin_event = hour + 1
                     
                     for next_hour in range(hour + 1, 14):
-                        next_key = f"{year}-{month}-{day}-{next_hour}-{terrain_cle}"
-                        next_resp = responsables.get(next_key, "")
-                        if next_resp == tournoi_info:
+                        next_key1 = f"{year}-{month}-{day}-{next_hour}-terrain1"
+                        next_key2 = f"{year}-{month}-{day}-{next_hour}-terrain2"
+                        next_resp1 = responsables.get(next_key1, "")
+                        next_resp2 = responsables.get(next_key2, "")
+                        if next_resp1 == tournoi_info and next_resp2 == tournoi_info:
                             heure_fin_event = next_hour + 1
-                            heures_traitees.add(next_hour)
+                            heures_traitees_terrain1.add(next_hour)
+                            heures_traitees_terrain2.add(next_hour)
                         else:
                             break
                     
@@ -158,7 +237,87 @@ def get_calendar_events():
                         "color": "#FED7AA",  # Pêche pastel pour les tournois
                         "textColor": "#1f2937"  # Texte noir
                     })
-                    continue  # Passer au créneau suivant
+                    continue
+                
+                # Traiter les tournois du terrain 1
+                if is_tournoi1 and hour not in heures_traitees_terrain1:
+                    tournoi_info = responsable1
+                    
+                    # Trouver toutes les heures consécutives avec le même tournoi
+                    heure_debut_event = hour
+                    heure_fin_event = hour + 1
+                    
+                    for next_hour in range(hour + 1, 14):
+                        next_key = f"{year}-{month}-{day}-{next_hour}-terrain1"
+                        next_resp = responsables.get(next_key, "")
+                        if next_resp == tournoi_info:
+                            heure_fin_event = next_hour + 1
+                            heures_traitees_terrain1.add(next_hour)
+                        else:
+                            break
+                    
+                    # Parser les infos du tournoi
+                    parts = tournoi_info.split("|")
+                    if len(parts) == 3:
+                        niveau = parts[1]
+                        genre = parts[2]
+                        title = f"🏆 T1: {niveau} - {genre}"
+                    else:
+                        title = "🏆 Terrain 1"
+                    
+                    # Créer l'événement pour toute la plage
+                    start_datetime = datetime(year, month, day, 8 + heure_debut_event, 0)
+                    end_datetime = datetime(year, month, day, 8 + heure_fin_event, 0)
+                    
+                    events.append({
+                        "title": title,
+                        "start": start_datetime.isoformat(),
+                        "end": end_datetime.isoformat(),
+                        "color": "#FED7AA",  # Pêche pastel pour les tournois
+                        "textColor": "#1f2937"  # Texte noir
+                    })
+                
+                # Traiter les tournois du terrain 2
+                if is_tournoi2 and hour not in heures_traitees_terrain2:
+                    tournoi_info = responsable2
+                    
+                    # Trouver toutes les heures consécutives avec le même tournoi
+                    heure_debut_event = hour
+                    heure_fin_event = hour + 1
+                    
+                    for next_hour in range(hour + 1, 14):
+                        next_key = f"{year}-{month}-{day}-{next_hour}-terrain2"
+                        next_resp = responsables.get(next_key, "")
+                        if next_resp == tournoi_info:
+                            heure_fin_event = next_hour + 1
+                            heures_traitees_terrain2.add(next_hour)
+                        else:
+                            break
+                    
+                    # Parser les infos du tournoi
+                    parts = tournoi_info.split("|")
+                    if len(parts) == 3:
+                        niveau = parts[1]
+                        genre = parts[2]
+                        title = f"🏆 T2: {niveau} - {genre}"
+                    else:
+                        title = "🏆 Terrain 2"
+                    
+                    # Créer l'événement pour toute la plage
+                    start_datetime = datetime(year, month, day, 8 + heure_debut_event, 0)
+                    end_datetime = datetime(year, month, day, 8 + heure_fin_event, 0)
+                    
+                    events.append({
+                        "title": title,
+                        "start": start_datetime.isoformat(),
+                        "end": end_datetime.isoformat(),
+                        "color": "#FED7AA",  # Pêche pastel pour les tournois
+                        "textColor": "#1f2937"  # Texte noir
+                    })
+                
+                # Si c'est un entraînement ou tournoi, ne pas traiter comme créneau ouvert
+                if is_entrainement1 or is_entrainement2 or is_tournoi1 or is_tournoi2:
+                    continue
                 
                 terrains_ouverts = 0
                 responsables_count = 0
@@ -172,7 +331,10 @@ def get_calendar_events():
                 
                 # Créer un événement si ce créneau est ouvert
                 if terrains_ouverts > 0:
-                    places_totales_creneau = terrains_ouverts * 4
+                    key_max_places = f"{year}-{month}-{day}-{hour}-max_places"
+                    capacite_max = terrains_ouverts * 8
+                    places_totales_creneau = responsables.get(key_max_places, capacite_max)
+                    places_totales_creneau = max(responsables_count, min(places_totales_creneau, capacite_max))
                     key_joueurs = f"{year}-{month}-{day}-{hour}-joueurs"
                     joueurs_count = len(responsables.get(key_joueurs, []))
                     places_occupees_creneau = responsables_count + joueurs_count
@@ -239,6 +401,10 @@ def get_calendar_options():
 if st.session_state.selected_day is None:
     st.title("📅 Calendrier du club")
     
+    st.markdown("""
+    Pour vous ajouter sur une session (hors entrainements/tournois), cliquez sur un créneau horaire vert/jaune/orange/rouge, puis sélectionnez votre nom dans la liste déroulante.\n
+    Pour les staffers, pour ajouter une session de jeu, cliquez sur le jour souhaité, puis utilisez les menus déroulants pour assigner un responsable à chaque terrain. Vous pouvez aussi indiquer le nombre de joueurs inscrits pour chaque créneau.""")
+    
     # Récupérer les événements
     events = get_calendar_events()
     calendar_options = get_calendar_options()
@@ -304,8 +470,9 @@ else:
         membres = [""] + membres  # Ajouter option vide
         
         # Filtrer les staffers pour les responsables de terrain
-        staffers = df_membres[df_membres["role"] == "Staffer"]["prenom"].str.cat(
-            df_membres[df_membres["role"] == "Staffer"]["nom"], sep=" "
+        staffers_df = df_membres[df_membres["staffer"] == "Oui"]
+        staffers = staffers_df["prenom"].str.cat(
+            staffers_df["nom"], sep=" "
         ).tolist()
         staffers = [""] + staffers  # Ajouter option vide
     except FileNotFoundError:
@@ -360,7 +527,10 @@ else:
                 # Déterminer l'emoji selon le remplissage du créneau
                 emoji_creneau = ""
                 if terrains_ouverts_creneau > 0:
-                    places_totales_creneau = terrains_ouverts_creneau * 4
+                    key_max_places = f"{day.year}-{day.month}-{day.day}-{i}-max_places"
+                    capacite_max = terrains_ouverts_creneau * 8
+                    places_totales_creneau = st.session_state.responsables.get(key_max_places, capacite_max)
+                    places_totales_creneau = max(responsables_count_creneau, min(places_totales_creneau, capacite_max))
                     key_joueurs = f"{day.year}-{day.month}-{day.day}-{i}-joueurs"
                     joueurs_count = len(st.session_state.responsables.get(key_joueurs, []))
                     places_occupees_creneau = responsables_count_creneau + joueurs_count
@@ -443,15 +613,15 @@ else:
                 # Déterminer si les terrains sont ouverts et le max de joueurs
                 # Ne pas permettre l'ajout de joueurs si c'est un entraînement ou un tournoi
                 terrains_ouverts = 0
-                responsable1 = current_resp1 if not is_entrainement1 and not is_tournoi1 else ""
-                responsable2 = current_resp2 if not is_entrainement2 and not is_tournoi2 else ""
+                responsable1 = st.session_state.responsables.get(key_terrain1, "") if not is_entrainement1 and not is_tournoi1 else ""
+                responsable2 = st.session_state.responsables.get(key_terrain2, "") if not is_entrainement2 and not is_tournoi2 else ""
+                responsable1 = responsable1.strip() if isinstance(responsable1, str) else ""
+                responsable2 = responsable2.strip() if isinstance(responsable2, str) else ""
                 
                 if responsable1:
                     terrains_ouverts += 1
                 if responsable2:
                     terrains_ouverts += 1
-                
-                max_joueurs = terrains_ouverts * 4 if terrains_ouverts > 0 else 0
                 
                 # Ajouter les joueurs si au moins un terrain est ouvert
                 if terrains_ouverts > 0:
@@ -459,35 +629,67 @@ else:
                     responsables_joueurs = []
                     if responsable1:
                         responsables_joueurs.append(responsable1)
-                    if responsable2 and responsable2 != responsable1:
+                    if responsable2 and responsable2.strip().lower() != responsable1.strip().lower():
                         responsables_joueurs.append(responsable2)
+
+                    min_capacite = len(responsables_joueurs)
+                    capacite_max = terrains_ouverts * 8
+                    key_max_places = f"{day.year}-{day.month}-{day.day}-{i}-max_places"
+                    capacite_courante = st.session_state.responsables.get(key_max_places, capacite_max)
+                    capacite_totale = max(min_capacite, min(capacite_courante, capacite_max))
+
+                    capacite_totale = st.selectbox(
+                        "Capacité totale du créneau (staffers inclus)",
+                        options=list(range(min_capacite, capacite_max + 1)),
+                        index=capacite_totale - min_capacite,
+                        key=f"capacite_{key_max_places}"
+                    )
+                    st.session_state.responsables[key_max_places] = capacite_totale
                     
-                    # Filtrer les membres disponibles (exclure vides, responsables)
-                    membres_disponibles = []
-                    for m in membres[1:]:
-                        if m != responsable1 and m != responsable2:
-                            membres_disponibles.append(m)
+                    # Tous les membres (hors option vide) pour inclure aussi les responsables dans la sélection
+                    membres_disponibles = membres[1:]
                     
                     key_joueurs = f"{day.year}-{day.month}-{day.day}-{i}-joueurs"
                     current_joueurs = st.session_state.responsables.get(key_joueurs, [])
                     
-                    # Filtrer les joueurs courants pour enlever les responsables et les doublons
-                    joueurs_valides = [j for j in current_joueurs if j in membres_disponibles]
+                    # Joueurs courants valides (hors responsables)
+                    joueurs_valides = [j for j in current_joueurs if j in membres_disponibles and j not in responsables_joueurs]
+                    joueurs_possibles = max(0, capacite_totale - len(responsables_joueurs))
+                    if len(joueurs_valides) > joueurs_possibles:
+                        joueurs_valides = joueurs_valides[:joueurs_possibles]
+
+                    # Préselectionner les responsables + joueurs
+                    selection_par_defaut = responsables_joueurs + [j for j in joueurs_valides if j not in responsables_joueurs]
+                    widget_key = f"joueurs_{key_joueurs}"
+                    signature_key = f"{widget_key}_staff_signature"
+                    staff_signature = "|".join(sorted([r.strip().lower() for r in responsables_joueurs]))
+
+                    # Si les staffers changent (ou 1er affichage), resynchroniser la sélection affichée
+                    if st.session_state.get(signature_key) != staff_signature or widget_key not in st.session_state:
+                        selection_affichee = [j for j in selection_par_defaut if j in membres_disponibles]
+                        selection_affichee = selection_affichee[:capacite_totale]
+                        st.session_state[widget_key] = selection_affichee
+                        st.session_state[signature_key] = staff_signature
                     
-                    joueurs_selectionnes = st.multiselect(
-                        f"Joueurs inscrits (max {max_joueurs})",
+                    selection_complete = st.multiselect(
+                        f"Joueurs inscrits (max {joueurs_possibles})",
                         membres_disponibles,
-                        default=joueurs_valides,
-                        max_selections=max_joueurs - len(responsables_joueurs),
-                        key=f"joueurs_{key_joueurs}",
+                        default=selection_par_defaut,
+                        max_selections=capacite_totale,
+                        placeholder="Selection des joueurs",
+                        key=widget_key,
                         label_visibility="collapsed"
                     )
+
+                    # Inclure automatiquement les responsables, même si décochés dans la liste
+                    joueurs_selectionnes = [j for j in selection_complete if j not in responsables_joueurs]
+                    joueurs_selectionnes = joueurs_selectionnes[:joueurs_possibles]
                     
                     # Combiner responsables + joueurs sélectionnés pour la sauvegarde
                     tous_les_joueurs = responsables_joueurs + joueurs_selectionnes
                     st.session_state.responsables[key_joueurs] = joueurs_selectionnes
                     
-                    st.write(f"**{len(tous_les_joueurs)}/{max_joueurs} places** (dont {len(responsables_joueurs)} responsable{'s' if len(responsables_joueurs) > 1 else ''})")
+                    st.write(f"**{len(tous_les_joueurs)}/{capacite_totale} places** (dont {len(responsables_joueurs)} responsable{'s' if len(responsables_joueurs) > 1 else ''} + max {joueurs_possibles} joueur{'s' if joueurs_possibles > 1 else ''})")
                 
                 st.divider()
 
