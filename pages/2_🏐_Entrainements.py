@@ -28,7 +28,7 @@ def save_responsables(responsables):
         json.dump(responsables, f, ensure_ascii=False, indent=2)
 
 def appliquer_entrainement_annee(jour_semaine, heure_debut, heure_fin, coach, terrain1, terrain2):
-    """Applique un entraînement récurrent sur toute l'année"""
+    """Applique un entraînement récurrent sur toute l'année avec vérification de conflits"""
     responsables = load_responsables()
     
     # Mapping des jours en français vers les indices (0=lundi, 6=dimanche)
@@ -39,18 +39,43 @@ def appliquer_entrainement_annee(jour_semaine, heure_debut, heure_fin, coach, te
     
     jour_idx = jours_mapping.get(jour_semaine.lower())
     if jour_idx is None:
-        return False
+        return False, []
     
     # Calculer les créneaux horaires concernés (commence à 8h)
     heure_debut_int = int(heure_debut.split(":")[0])
     heure_fin_int = int(heure_fin.split(":")[0])
     creneaux = list(range(heure_debut_int - 8, heure_fin_int - 8))
     
-    # Parcourir toute l'année 2026
+    # Vérifier les conflits potentiels
+    conflits = []
     start_date = datetime(2026, 1, 1)
     end_date = datetime(2026, 12, 31)
     current_date = start_date
     
+    while current_date <= end_date:
+        if current_date.weekday() == jour_idx:
+            year = current_date.year
+            month = current_date.month
+            day = current_date.day
+            
+            for creneau in creneaux:
+                if terrain1:
+                    key = f"{year}-{month}-{day}-{creneau}-terrain1"
+                    if responsables.get(key):  # Vérifier si terrain1 est déjà occupé
+                        conflits.append(f"{day}/{month}/{year} - Terrain 1 - {8+creneau}h")
+                if terrain2:
+                    key = f"{year}-{month}-{day}-{creneau}-terrain2"
+                    if responsables.get(key):  # Vérifier si terrain2 est déjà occupé
+                        conflits.append(f"{day}/{month}/{year} - Terrain 2 - {8+creneau}h")
+        
+        current_date += timedelta(days=1)
+    
+    # Si des conflits existent, retourner les informations sans appliquer
+    if conflits:
+        return False, conflits
+    
+    # Sinon, appliquer l'entraînement
+    current_date = start_date
     count = 0
     while current_date <= end_date:
         # Vérifier si c'est le bon jour de la semaine
@@ -76,7 +101,7 @@ def appliquer_entrainement_annee(jour_semaine, heure_debut, heure_fin, coach, te
     return count
 
 def bloquer_tournoi(date, heure_debut, heure_fin, niveau, genre, terrain1, terrain2):
-    """Bloque les créneaux pour un tournoi à une date spécifique"""
+    """Bloque les créneaux pour un tournoi à une date spécifique avec vérification de conflits"""
     responsables = load_responsables()
     
     # Calculer les créneaux horaires concernés (commence à 8h)
@@ -87,6 +112,22 @@ def bloquer_tournoi(date, heure_debut, heure_fin, niveau, genre, terrain1, terra
     year = date.year
     month = date.month
     day = date.day
+    
+    # Vérifier les conflits
+    conflits = []
+    for creneau in creneaux:
+        if terrain1:
+            key = f"{year}-{month}-{day}-{creneau}-terrain1"
+            if responsables.get(key):
+                conflits.append(f"{day}/{month}/{year} - Terrain 1 - {8+creneau}h")
+        if terrain2:
+            key = f"{year}-{month}-{day}-{creneau}-terrain2"
+            if responsables.get(key):
+                conflits.append(f"{day}/{month}/{year} - Terrain 2 - {8+creneau}h")
+    
+    # Si des conflits existent, retourner sans appliquer
+    if conflits:
+        return False, conflits
     
     # Créer l'identifiant du tournoi
     tournoi_info = f"TOURNOI|{niveau}|{genre}"
@@ -101,14 +142,15 @@ def bloquer_tournoi(date, heure_debut, heure_fin, niveau, genre, terrain1, terra
             responsables[key] = tournoi_info
     
     save_responsables(responsables)
-    return True
+    return 1, []  # Retourner 1 pour indiquer le succès (un tournoi)
+
 
 # Afficher les entraînements existants
 st.header("📋 Entraînements récurrents")
 
 try:
     df_entrainements = pd.read_csv(ENTRAINEMENTS_FILE)
-    st.dataframe(df_entrainements, use_container_width=True)
+    st.dataframe(df_entrainements, use_container_width=True, hide_index=True)
 except FileNotFoundError:
     df_entrainements = pd.DataFrame(columns=["jour", "heure_debut", "heure_fin", "coach", "niveau", "genre", "terrain1", "terrain2"])
     st.info("Aucun entraînement récurrent pour le moment.")
@@ -120,7 +162,7 @@ st.header("🏆 Tournois programmés")
 
 try:
     df_tournois = pd.read_csv(TOURNOIS_FILE)
-    st.dataframe(df_tournois, use_container_width=True)
+    st.dataframe(df_tournois, use_container_width=True, hide_index=True)
 except FileNotFoundError:
     df_tournois = pd.DataFrame(columns=["date", "heure_debut", "heure_fin", "niveau", "genre", "terrain1", "terrain2"])
     st.info("Aucun tournoi programmé pour le moment.")
@@ -174,36 +216,45 @@ with st.expander("➕ Ajouter un entraînement récurrent", expanded=False):
             elif not terrain1 and not terrain2:
                 st.error("Veuillez sélectionner au moins un terrain")
             else:
-                # Ajouter au CSV
-                nouvelle_ligne = pd.DataFrame([{
-                    "jour": jour,
-                    "heure_debut": heure_debut.strftime("%H:%M"),
-                    "heure_fin": heure_fin.strftime("%H:%M"),
-                    "coach": coach,
-                    "niveau": niveau,
-                    "genre": genre,
-                    "terrain1": "oui" if terrain1 else "non",
-                    "terrain2": "oui" if terrain2 else "non"
-                }])
-                
-                df_entrainements = pd.concat([df_entrainements, nouvelle_ligne], ignore_index=True)
-                df_entrainements.to_csv(ENTRAINEMENTS_FILE, index=False)
-                
                 # Créer l'identifiant d'entraînement
                 coach_info = f"ENTRAINEMENT|{coach}|{genre}|{niveau}"
                 
-                # Appliquer sur toute l'année
-                nb_occurrences = appliquer_entrainement_annee(
+                # Vérifier les conflits avant d'ajouter
+                success, conflits = appliquer_entrainement_annee(
                     jour,
                     heure_debut.strftime("%H:%M"),
                     heure_fin.strftime("%H:%M"),
-                coach_info,
-                terrain1,
-                terrain2
-            )
+                    coach_info,
+                    terrain1,
+                    terrain2
+                )
+                
+                if not success and conflits:
+                    st.error("❌ **ATTENTION : Impossible d'ajouter cet entraînement !**")
+                    st.error("Les créneaux suivants sont déjà occupés sur le terrain sélectionné :")
+                    with st.expander("📋 Voir la liste complète des conflits", expanded=True):
+                        for conflit in conflits:
+                            st.write(f"• {conflit}")
+                    st.info("💡 Veuillez modifier l'heure ou le jour de l'entraînement pour éviter ces conflits.")
+                    st.stop()  # Arrêter l'exécution pour keeper le message visible
+                else:
+                    # Ajouter au CSV
+                    nouvelle_ligne = pd.DataFrame([{
+                        "jour": jour,
+                        "heure_debut": heure_debut.strftime("%H:%M"),
+                        "heure_fin": heure_fin.strftime("%H:%M"),
+                        "coach": coach,
+                        "niveau": niveau,
+                        "genre": genre,
+                        "terrain1": "oui" if terrain1 else "non",
+                        "terrain2": "oui" if terrain2 else "non"
+                    }])
+                    
+                    df_entrainements = pd.concat([df_entrainements, nouvelle_ligne], ignore_index=True)
+                    df_entrainements.to_csv(ENTRAINEMENTS_FILE, index=False)
             
-            st.success(f"✅ Entraînement ajouté avec succès ! {nb_occurrences} séances programmées sur l'année 2026.")
-            st.rerun()
+                    st.success(f"✅ Entraînement ajouté avec succès ! {success} séances programmées sur l'année 2026.")
+                    st.rerun()
 
 # Formulaire d'ajout de tournoi dans un expander
 with st.expander("🏆 Ajouter un tournoi", expanded=False):
@@ -250,23 +301,8 @@ with st.expander("🏆 Ajouter un tournoi", expanded=False):
             if not terrain1_tournoi and not terrain2_tournoi:
                 st.error("Veuillez sélectionner au moins un terrain")
             else:
-                # Ajouter au CSV
-                nouvelle_ligne_tournoi = pd.DataFrame([{
-                    "date": date_tournoi.strftime("%Y-%m-%d"),
-                    "heure_debut": heure_debut_tournoi.strftime("%H:%M"),
-                    "heure_fin": heure_fin_tournoi.strftime("%H:%M"),
-                    "niveau": niveau_tournoi,
-                    "genre": genre_tournoi,
-                    "terrain1": "oui" if terrain1_tournoi else "non",
-                    "terrain2": "oui" if terrain2_tournoi else "non"
-                }])
-                
-                df_tournois = pd.concat([df_tournois, nouvelle_ligne_tournoi], ignore_index=True)
-                os.makedirs("data", exist_ok=True)
-                df_tournois.to_csv(TOURNOIS_FILE, index=False)
-                
-                # Bloquer les créneaux
-                bloquer_tournoi(
+                # Vérifier les conflits avant d'ajouter
+                success, conflits = bloquer_tournoi(
                     date_tournoi,
                     heure_debut_tournoi.strftime("%H:%M"),
                     heure_fin_tournoi.strftime("%H:%M"),
@@ -276,8 +312,32 @@ with st.expander("🏆 Ajouter un tournoi", expanded=False):
                     terrain2_tournoi
                 )
                 
-                st.success(f"✅ Tournoi ajouté avec succès pour le {date_tournoi.strftime('%d/%m/%Y')} !")
-                st.rerun()
+                if not success and conflits:
+                    st.error("❌ **ATTENTION : Impossible d'ajouter ce tournoi !**")
+                    st.error("Les créneaux suivants sont déjà occupés sur le terrain sélectionné :")
+                    with st.expander("📋 Voir la liste complète des conflits", expanded=True):
+                        for conflit in conflits:
+                            st.write(f"• {conflit}")
+                    st.info("💡 Veuillez modifier l'heure ou la date du tournoi pour éviter ces conflits.")
+                    st.stop()  # Arrêter l'exécution pour keeper le message visible
+                else:
+                    # Ajouter au CSV
+                    nouvelle_ligne_tournoi = pd.DataFrame([{
+                        "date": date_tournoi.strftime("%Y-%m-%d"),
+                        "heure_debut": heure_debut_tournoi.strftime("%H:%M"),
+                        "heure_fin": heure_fin_tournoi.strftime("%H:%M"),
+                        "niveau": niveau_tournoi,
+                        "genre": genre_tournoi,
+                        "terrain1": "oui" if terrain1_tournoi else "non",
+                        "terrain2": "oui" if terrain2_tournoi else "non"
+                    }])
+                    
+                    df_tournois = pd.concat([df_tournois, nouvelle_ligne_tournoi], ignore_index=True)
+                    os.makedirs("data", exist_ok=True)
+                    df_tournois.to_csv(TOURNOIS_FILE, index=False)
+                    
+                    st.success(f"✅ Tournoi ajouté avec succès pour le {date_tournoi.strftime('%d/%m/%Y')} !")
+                    st.rerun()
 
 st.divider()
 
@@ -296,7 +356,7 @@ with col1:
                 terrain2 = row["terrain2"] == "oui"
                 # Créer un identifiant d'entraînement au format: "ENTRAINEMENT|coach|genre|niveau"
                 coach_info = f"ENTRAINEMENT|{row['coach']}|{row.get('genre', 'Mixte')}|{row['niveau']}"
-                nb = appliquer_entrainement_annee(
+                success, conflits = appliquer_entrainement_annee(
                     row["jour"],
                     row["heure_debut"],
                     row["heure_fin"],
@@ -304,7 +364,8 @@ with col1:
                     terrain1,
                     terrain2
                 )
-                total += nb
+                if success:
+                    total += success
             st.success(f"✅ {total} séances programmées sur toute l'année !")
             st.info("💡 Retournez sur la page Calendrier pour voir les entraînements apparaître en violet.")
         except Exception as e:
@@ -319,7 +380,7 @@ with col2:
                 terrain1 = row["terrain1"] == "oui"
                 terrain2 = row["terrain2"] == "oui"
                 date_tournoi = datetime.strptime(row["date"], "%Y-%m-%d")
-                bloquer_tournoi(
+                success, conflits = bloquer_tournoi(
                     date_tournoi,
                     row["heure_debut"],
                     row["heure_fin"],
@@ -328,7 +389,8 @@ with col2:
                     terrain1,
                     terrain2
                 )
-                total += 1
+                if success:
+                    total += success
             st.success(f"✅ {total} tournoi(s) reprogrammé(s) !")
             st.info("💡 Retournez sur la page Calendrier pour voir les tournois.")
         except Exception as e:
