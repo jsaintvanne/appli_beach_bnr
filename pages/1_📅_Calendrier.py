@@ -115,7 +115,8 @@ def get_calendar_events():
                         "title": title,
                         "start": start_datetime.isoformat(),
                         "end": end_datetime.isoformat(),
-                        "color": "#9333ea"  # Violet pour les entraînements
+                        "color": "#E9D5FF",  # Lavande pastel pour les entraînements
+                        "textColor": "#1f2937"  # Texte noir
                     })
                     continue  # Passer au créneau suivant
                 
@@ -154,7 +155,8 @@ def get_calendar_events():
                         "title": title,
                         "start": start_datetime.isoformat(),
                         "end": end_datetime.isoformat(),
-                        "color": "#f59e0b"  # Orange/doré pour les tournois
+                        "color": "#FED7AA",  # Pêche pastel pour les tournois
+                        "textColor": "#1f2937"  # Texte noir
                     })
                     continue  # Passer au créneau suivant
                 
@@ -183,15 +185,15 @@ def get_calendar_events():
                     
                     # Déterminer la couleur en fonction du remplissage
                     if pourcentage_creneau >= 100:
-                        color = "#000000"  # Noir - plein
+                        color = "#D1D5DB"  # Gris clair - plein
                     elif pourcentage_creneau <= 25:
-                        color = "#00cc96"  # Vert
+                        color = "#BBF7D0"  # Vert menthe pastel
                     elif pourcentage_creneau < 50:
-                        color = "#ffd60a"  # Jaune
+                        color = "#FEF3C7"  # Jaune pastel
                     elif pourcentage_creneau < 75:
-                        color = "#ff9016"  # Orange
+                        color = "#FDBA74"  # Orange pastel
                     else:
-                        color = "#ff4136"  # Rouge
+                        color = "#FECACA"  # Rose pastel
                     
                     # Créer l'heure de début et fin spécifique pour ce créneau
                     start_datetime = datetime(year, month, day, heure_debut, 0)
@@ -201,7 +203,8 @@ def get_calendar_events():
                         "title": title,
                         "start": start_datetime.isoformat(),
                         "end": end_datetime.isoformat(),
-                        "color": color
+                        "color": color,
+                        "textColor": "#1f2937"  # Texte noir
                     })
     
     return events
@@ -224,7 +227,7 @@ def get_calendar_options():
             "meridiem": False,
             "omitZeroMinute": True
         },
-        "eventDisplay": "block",  # Affichage en bloc pour éviter les débordements
+        "eventDisplay": "block",  # Affichage en bloc (meilleur pour le responsive)
         "editable": False,
         "selectable": True,
         "height": "auto",

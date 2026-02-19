@@ -1,6 +1,6 @@
 import streamlit as st
 
-st.title("🏐 Beach Nantes Rezé")
+st.title("🏐 Beach Nantes Rezé 🐘")
 st.subheader("Bienvenue sur le site officiel du club !")
 
 st.markdown("""
